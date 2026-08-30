@@ -14,3 +14,6 @@ DESIGN.md
 # data-raw/verify-against-original.R stays runnable. Not published: it is
 # superseded code, and the regression fixture already pins its output.
 data-raw/original-scaffold/
+
+# Left behind by running examples that plot
+Rplots.pdf

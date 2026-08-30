@@ -27,6 +27,24 @@
 #' @seealso [rails()], which runs the GVS loop, and [nps_weights()] for the
 #'   model being tested.
 #'
+#' @examples
+#' pop <- rails_simulate(20000, seed = 42)
+#' vars <- c("agegroup", "sex", "income")
+#' np  <- rails_cells(pop[pop$aou == 1, ], vars)
+#' ref <- rails_cells(pop[pop$s == 1, ], vars, weights = 1 / pop$ps[pop$s == 1])
+#'
+#' # The current model: main effects only.
+#' terms_now <- vars
+#' f <- stats::formula(paste("~", paste(terms_now, collapse = "+")))
+#' d <- nps_weights(f, np, ref)
+#' m_ref <- Matrix::sparse.model.matrix(f, ref)
+#' loglik <- sum(as.numeric(Matrix::crossprod(
+#'     Matrix::sparse.model.matrix(f, np), np$weight)) * attr(d, "theta")) -
+#'   sum(ref$weight * log1p(exp(as.numeric(m_ref %*% attr(d, "theta")))))
+#'
+#' # Test one candidate interaction against it.
+#' gvs_step("sex:income", terms_now, loglik, ref, np, m_ref)
+#'
 #' @export
 gvs_step <- function(x, terms_current, loglik, cells_ref, cells_np, m_ref,
                      maxit = 1000, tol = 1e-3) {

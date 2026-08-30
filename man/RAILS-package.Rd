@@ -11,8 +11,8 @@ Combines a non-probability sample (e.g. a volunteer biobank) with a probability 
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/extrasane/RAILS}
-  \item Report bugs at \url{https://github.com/extrasane/RAILS/issues}
+  \item \url{https://github.com/extrasane/RAILSpkg}
+  \item Report bugs at \url{https://github.com/extrasane/RAILSpkg/issues}
 }
 
 }

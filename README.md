@@ -26,65 +26,275 @@ remotes::install_github("extrasane/RAILSpkg")
 
 ## Usage
 
+### A worked example, end to end
+
+`rails_simulate()` gives a population where the truth is known: `aou` is a
+biased volunteer sample, `s` is a probability sample carrying design weights.
+
 ```r
 library(RAILS)
 
-# A synthetic population: `aou` is the biased volunteer sample,
-# `s` is a probability sample with design weights 1 / ps.
-pop <- rails_simulate(20000, seed = 1)
-aou <- pop[pop$aou == 1, ]
-ref <- pop[pop$s == 1, ]
-ref$dweight <- 1 / ref$ps
+pop <- rails_simulate(20000, seed = 42)
+aou <- pop[pop$aou == 1, ]        # the volunteer sample
+ref <- pop[pop$s == 1, ]          # the probability sample
+ref$dweight <- 1 / ref$ps         # its design weights
+```
 
+`rails()` needs the two samples, the covariates they share, and the reference
+sample's design weights. `start` and `scope` say which models the search runs
+between — see below.
+
+```r
 fit <- rails(aou, ref,
-             vars = c("agegroup", "sex", "income"),
-             weights_ref = "dweight")
+             vars        = c("agegroup", "sex", "income"),
+             weights_ref = "dweight",
+             start = 1, scope = 2)
+fit
+#> RAILS fit
+#>   covariates   : agegroup, sex, income
+#>   start model  : 3 term(s)
+#>   scope        : 6 term(s), so 3 candidate(s)
+#>   selected     : 2 term(s) at alpha = 0.05
+#>                  agegroup:sex, sex:income
+#>   raked        : 2 of 2 selected term(s) survived the stepwise walk
+#>   cells        : 24
+#>   weights      : n = 3799, sum = 19,875.78, range 1.65 to 25.9
+```
 
-summary(fit)
+The weights remove most of the selection bias:
+
+```r
 w <- weights(fit)
+c(truth      = mean(pop$y),
+  unweighted = mean(aou$y),
+  rails      = sum(w * aou$y) / sum(w))
+#>      truth unweighted      rails
+#>     0.1952     0.2545     0.2051
 ```
 
-The weights correct the selection bias:
+### Preparing the inputs
+
+`rails()` takes individual records and aggregates them for you. It only ever
+works on covariate cells, so cost scales with the number of distinct covariate
+patterns, not the sample size.
+
+When the microdata will not fit in one data frame — or when you want to inspect
+what is being fitted — build the pieces yourself:
 
 ```r
-mean(pop$y)                      # population truth
-mean(aou$y)                      # unweighted volunteer sample
-sum(w * aou$y) / sum(w)          # RAILS
+vars      <- c("agegroup", "sex", "income")
+cells_np  <- rails_cells(aou, vars)                          # one row per cell
+cells_ref <- rails_cells(ref, vars, weights = "dweight")
+totals    <- rails_totals(cells_ref, order = 2)              # population margins
+
+fit <- rails(cells_np, cells_ref, vars,
+             pop_totals = totals, aggregated = TRUE)
 ```
 
-Standard errors. `rails_var()` gives the simplified (fixed-weight) variance by
-default, and the stacked variance that accounts for the weights having been
-*estimated* on request:
+`rails_totals()` names the margins exactly as the calibration model matrix names
+them, which is the step most easily got wrong by hand. Supply your own
+`pop_totals` when the margins come from an external table rather than from the
+reference sample.
+
+Two consequences of `aggregated = TRUE`: `weights()` returns one weight per
+cell rather than per record, and `rails_var()` will not run, since the variance
+needs one outcome per record.
+
+### Choosing which models the search runs between
+
+`start` is the model taken as given; `scope` is the largest model selection may
+reach. Everything in `scope` but not in `start` is a candidate for the forward
+test. Each accepts an interaction order, a one-sided formula, or an explicit
+character vector of terms.
 
 ```r
-rails_var(fit, aou$y)                      # simplified, the default
-rails_var(fit, aou$y, type = "both")       # and the stacked correction
+rails(aou, ref, vars, weights_ref = "dweight")                    # start = 2, scope = 3
+rails(aou, ref, vars, weights_ref = "dweight", scope = 2)         # no selection: just rake
+rails(aou, ref, vars, weights_ref = "dweight", start = 1, scope = 2)
+rails(aou, ref, vars, weights_ref = "dweight",
+      start = ~ (agegroup + sex + income)^2,
+      scope = ~ (agegroup + sex + income)^3)                      # same as the default
 ```
 
-And for everything else, hand the weights to **survey**:
+The defaults `start = 2, scope = 3` are the published estimator. Term
+components may be written in any order: `"sex:agegroup"` matches
+`"agegroup:sex"`.
+
+### Reading the fit
+
+```r
+summary(fit)
+#> Selected terms (2):
+#>   1. agegroup:sex
+#>   2. sex:income
+#>
+#> Raked to 5 term(s); full walk completed.
+#>
+#> Weight diagnostics:
+#>                sum                var non_positive_ratio          below_one
+#>         19875.7840            16.4808             0.0000             0.0000
+#>                min                max
+#>             1.6543            25.8569
+#>
+#> Design effect (Kish): 1.602
+#> Effective sample size: 2371.5
+```
+
+The design effect is the price of weighting — the factor by which unequal
+weights inflate the variance of a mean — so an effective sample size well below
+the nominal one is expected. A very large one means a handful of records carry
+the estimate. `plot(fit)` shows the weight distribution on a log scale, which is
+where a heavy right tail is visible.
+
+Useful fields on the fit: `terms_selected`, `terms_used` (what was actually
+raked to), `converged`, and `cells`.
+
+### Standard errors
+
+`rails_var()` reports the **simplified** variance by default, which treats the
+weights as fixed. That is what the papers report.
+
+```r
+rails_var(fit, aou$y)
+#>         mu_hat      var_naive       se_naive ci_naive_lower ci_naive_upper
+#>        0.20512        0.00006        0.00762        0.19019        0.22006
+```
+
+The **stacked** variance additionally accounts for the weights having been
+estimated, through a sandwich over the propensity, calibration and mean stages:
+
+```r
+rails_var(fit, aou$y, type = "stacked")
+rails_var(fit, aou$y, type = "both")     # both, plus ratio_full_naive
+```
+
+`ratio_full_naive` can fall either side of 1. Ignoring the propensity stage
+tends to understate, but raking to *known* margins removes variance the way a
+regression estimator does, and the second effect often wins.
+
+Pass `truth =` to get coverage indicators, which is what the simulation studies
+use.
+
+### Downstream analysis
 
 ```r
 des <- rails_design(fit, aou)
+survey::svymean(~y, des)
 survey::svyglm(y ~ agegroup, design = des, family = quasibinomial())
 ```
 
-## Functions
+Point estimates from this design are exact. Its standard errors are survey's own
+design-based ones, close to but not identical with `rails_var(type =
+"simplified")`, and neither accounts for the weights having been estimated. Use
+`rails_var()` for inference on a mean.
+
+### Subgroup calibration
+
+`rails_subgroup()` runs the whole procedure independently within each level of a
+stratifier: its own propensity model, selection path, stepwise walk and margins,
+with weights scaled to that stratum's total.
+
+```r
+sfit <- rails_subgroup(aou, ref,
+                       vars = c("sex", "income"),
+                       by   = "agegroup",
+                       weights_ref = "dweight",
+                       start = 1, scope = 2)
+
+weights(sfit)                       # pooled, aligned to the rows of `aou`
+sfit$fits[["young"]]                # the individual stratum fits
+rails_var(sfit, aou$y)              # one row per stratum
+```
+
+`by` must not appear in `vars` — within a stratum it is constant. Which variable
+you stratify by decides what is left for selection to find: an interaction
+involving the stratifier flattens into a main effect inside each stratum. See
+`vignette("subgroup-rails")`.
+
+### When raking does not converge
+
+Two arguments control what happens then.
+
+`lifo` sets the direction of the stepwise stage. `"descending"` (the default) is
+the method as published: rake the full selected model, and pop the last-added
+term until raking converges. `"ascending"` climbs from the starting model and
+halts at the first failure, which is what the application code did — use it to
+reproduce published application results exactly.
+
+`fallback` decides what comes back when selection picks nothing, or when no
+selected model rakes. `FALSE` (the default) returns `NA` weights, which is what
+the published code does and makes a non-result impossible to miss. `TRUE`
+returns the raked starting model instead. Either way `fit$converged` records
+which happened.
+
+### Reproducing the published estimator
+
+The defaults `start = 2`, `scope = 3`, `fallback = FALSE`, plus `lifo =
+"ascending"`, are exactly the procedure of the application code. The deprecated
+`fun.rails.threeway()` is pinned to that and returns the old wide data frame.
+`tests/testthat/test-reproduces-original.R` asserts the package still matches
+the original implementation's output.
+
+## Function reference
+
+Every function has a help page with arguments, return value and a runnable
+example: `?rails`, `?rails_var`, and so on. `help(package = "RAILS")` lists them
+all.
+
+**Fitting**
 
 | Function | Purpose |
 |---|---|
-| `rails()` | The estimator: propensity model, forward selection, stepwise raking |
-| `rails_subgroup()` | Subgroup calibration: runs the estimator independently within each stratum |
+| `rails()` | The estimator: NPS, greedy variable selection, LIFO stepwise raking |
+| `rails_subgroup()` | Subgroup calibration: the estimator run independently within each stratum |
+
+**Inspecting a fit** — S3 methods on `rails_fit`
+
+| Function | Purpose |
+|---|---|
+| `weights()` | The fitted weights, one per record |
+| `summary()` | Selection path, weight diagnostics, design effect, effective sample size |
+| `print()` | One-screen overview of the fit |
+| `plot()` | Weight distribution on a log scale |
+| `weight_summary()` | Weight diagnostics for any weight vector |
+
+**Inference**
+
+| Function | Purpose |
+|---|---|
 | `rails_var()` | Variance of a weighted mean, global or per stratum: simplified by default, stacked on request |
+| `rails_design()` | Wrap the weights in a `survey` design for `svymean()`, `svyglm()`, `svyby()` |
+
+**Preparing inputs**
+
+| Function | Purpose |
+|---|---|
 | `rails_cells()` | Aggregate microdata into covariate cells |
 | `rails_totals()` | Population margins, named to match the calibration model matrix |
-| `rails_design()` | Wrap the weights in a `survey` design |
-| `rails_simulate()` | Synthetic population for examples and testing |
 | `pums_fetch()` | Download ACS PUMS microdata from the Census API |
 | `pums_recode()` | Band raw ACS codes into the analysis variables |
 | `pums_reference()` | Cleaned records, cell table and margins in one object |
-| `nps_weights()` | Nested propensity score weights (one fit) |
-| `gvs_step()` | Greedy variable selection: likelihood-ratio test for one candidate |
-| `weight_summary()` | Weight diagnostics |
+| `pums_variables()` | The ACS variables the fetch requests |
+| `rails_simulate()` | Synthetic population for examples and testing |
+
+**Algorithm stages** — exported for inspection; `rails()` calls them for you
+
+| Function | Purpose |
+|---|---|
+| `nps_weights()` | Nested propensity score weights for one model (`?nps`) |
+| `gvs_step()` | Greedy variable selection: likelihood-ratio test for one candidate (`?gvs`) |
+
+**Deprecated** — the pre-package names, kept working: `fun.rails.threeway()`,
+`fun.sub.rails.threeway()`, `fun.nps()`, `fun.lkd()`, `fun.out()`. See
+`?"RAILS-deprecated"`.
+
+## Longer documentation
+
+| Where | What |
+|---|---|
+| `vignette("rails")` | Getting started: the problem, a fit, diagnostics, variance, `survey` |
+| `vignette("subgroup-rails")` | Subgroup calibration, choosing a stratifier, per-stratum variance |
+| `?rails` | Every argument, the benchmark-name mapping, how to reproduce the paper |
 
 ## Building the reference sample from ACS PUMS
 
