@@ -9,3 +9,8 @@ docs/
 # Internal working notes: decision log, manuscript check, open questions.
 # Kept local -- it names an API key incident and discusses unsubmitted work.
 DESIGN.md
+
+# Archived copy of the pre-package scaffold, kept so
+# data-raw/verify-against-original.R stays runnable. Not published: it is
+# superseded code, and the regression fixture already pins its output.
+data-raw/original-scaffold/

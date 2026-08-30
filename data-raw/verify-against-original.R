@@ -1,7 +1,8 @@
 ## Verify the new package against the ORIGINAL sources, not against itself.
 ##
 ## Originals:
-##   C:/Work/REpo/RAILS_Edit/RAILS/R/*.R                  scaffold (application code)
+##   data-raw/original-scaffold/R/*.R   the pre-package scaffold, archived here
+##     from the RAILS repo branch package-build before that branch was deleted
 ##   C:/Work/REpo/RAILS_Edit/Functions/supplementary_functions.R   fun.rails.var
 ##
 ## Both implementations are fed byte-identical inputs; only the code differs.
@@ -14,7 +15,7 @@ suppressPackageStartupMessages({
   library(dplyr); library(Matrix); library(survey); library(magrittr); library(rlang)
 })
 
-OLD_DIR <- "C:/Work/REpo/RAILS_Edit/RAILS/R"
+OLD_DIR <- "C:/Work/REpo/RAILS_package/data-raw/original-scaffold/R"
 FUNCS   <- "C:/Work/REpo/RAILS_Edit/Functions/supplementary_functions.R"
 
 ## ---- Load the originals into their own environment ------------------------
