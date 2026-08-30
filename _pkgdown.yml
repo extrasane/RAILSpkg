@@ -1,0 +1,81 @@
+url: https://extrasane.github.io/RAILSpkg/
+
+template:
+  bootstrap: 5
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+
+reference:
+- title: Fitting
+  desc: >
+    The estimator. `rails()` calibrates the whole cohort; `rails_subgroup()`
+    runs the same procedure independently within each stratum.
+  contents:
+  - rails
+  - rails_subgroup
+
+- title: Inspecting a fit
+  desc: >
+    S3 methods on `rails_fit`, plus a diagnostic that works on any weight
+    vector.
+  contents:
+  - weights.rails_fit
+  - summary.rails_fit
+  - plot.rails_fit
+  - weight_summary
+
+- title: Inference
+  desc: >
+    `rails_var()` is the reference for inference on a weighted mean.
+    `rails_design()` hands the weights to the survey package for everything
+    else.
+  contents:
+  - rails_var
+  - rails_design
+
+- title: Preparing inputs
+  desc: >
+    Cell tables and population margins, from your own data or from ACS PUMS.
+  contents:
+  - rails_cells
+  - rails_totals
+  - pums_fetch
+  - pums_recode
+  - pums_reference
+  - pums_variables
+
+- title: Simulation
+  desc: >
+    A synthetic population with a known truth, used by every example and
+    vignette here.
+  contents:
+  - rails_simulate
+
+- title: Algorithm stages
+  desc: >
+    Exported so the individual steps can be inspected or reused. `rails()`
+    calls them for you.
+  contents:
+  - nps_weights
+  - gvs_step
+
+- title: Deprecated
+  desc: >
+    The pre-package function names. They still work and forward to their
+    replacements.
+  contents:
+  - RAILS-deprecated
+
+- title: Package
+  contents:
+  - RAILS-package
+
+articles:
+- title: Articles
+  navbar: ~
+  contents:
+  - rails
+  - subgroup-rails

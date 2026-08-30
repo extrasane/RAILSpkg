@@ -290,6 +290,9 @@ all.
 
 ## Longer documentation
 
+Full documentation, including both vignettes rendered with their output, is at
+<https://extrasane.github.io/RAILSpkg/>.
+
 | Where | What |
 |---|---|
 | `vignette("rails")` | Getting started: the problem, a fit, diagnostics, variance, `survey` |
