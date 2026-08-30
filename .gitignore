@@ -1,0 +1,11 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+docs/
+*.Rcheck/
+*.tar.gz
+
+# Internal working notes: decision log, manuscript check, open questions.
+# Kept local -- it names an API key incident and discusses unsubmitted work.
+DESIGN.md

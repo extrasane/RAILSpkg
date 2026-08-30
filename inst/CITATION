@@ -1,0 +1,35 @@
+## Note on authorship: the package is authored by Huiding Chen alone (see
+## DESCRIPTION). The paper entry below carries the arXiv byline in full, because
+## a citation has to match the published record.
+##
+## The subgroup paper is not yet submitted and is deliberately not cited here.
+## Update the first entry when the global RAILS paper reaches a journal.
+
+citHeader("To cite RAILS in publications, use:")
+
+bibentry(
+  bibtype       = "Misc",
+  title         = paste("RAILS: A Synthetic Sampling Weights for Volunteer-Based",
+                        "National Biobanks -- A Case Study with the All of Us",
+                        "Research Program"),
+  author        = c(person("Huiding", "Chen"),
+                    person("Andrew", "Guide"),
+                    person("Lina", "Sulieman"),
+                    person("Robert M", "Cronin"),
+                    person("Thomas", "Lumley"),
+                    person("Qingxia", "Chen")),
+  year          = "2025",
+  eprint        = "2501.09115",
+  archivePrefix = "arXiv",
+  primaryClass  = "stat.ME",
+  url           = "https://arxiv.org/abs/2501.09115"
+)
+
+bibentry(
+  bibtype = "Manual",
+  title   = "RAILS: Raking with Assisted Nested Propensity Score and LIFO Selection",
+  author  = c(person("Huiding", "Chen")),
+  year    = "2026",
+  note    = "R package version 0.1.0",
+  url     = "https://github.com/extrasane/RAILSpkg"
+)

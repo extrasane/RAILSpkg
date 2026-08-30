@@ -1,0 +1,42 @@
+Package: RAILS
+Title: Raking with Assisted Nested Propensity Score and LIFO Selection
+Version: 0.1.0
+Authors@R:
+    person("Huiding", "Chen", email = "extrasane@gmail.com",
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-5102-434X"))
+Description: Combines a non-probability sample (e.g. a volunteer biobank) with
+    a probability reference sample to produce population-representative
+    weights. The core estimator fits a pseudo-likelihood propensity model on
+    all interactions up to a base order, selects higher-order interactions by
+    a forward likelihood-ratio test, and applies last-in-first-out stepwise
+    raking to reference population margins. All computation runs on aggregated
+    covariate cells. Variance is available from a stacked estimating-equation
+    sandwich that accounts for uncertainty in the estimated weights, and a
+    subgroup wrapper runs the procedure within levels of a stratifying
+    variable.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+Depends:
+    R (>= 4.1)
+Imports:
+    dplyr,
+    graphics,
+    magrittr,
+    MASS,
+    Matrix,
+    rlang,
+    stats,
+    survey,
+    utils
+Suggests:
+    jsonlite,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+URL: https://github.com/extrasane/RAILSpkg
+BugReports: https://github.com/extrasane/RAILSpkg/issues
