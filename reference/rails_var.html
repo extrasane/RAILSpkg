@@ -9,7 +9,7 @@ RAILS weights, in either of two forms."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">RAILS</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,13 +62,17 @@ RAILS weights, in either of two forms.</p>
 
 <dl><dt id="arg-fit">fit<a class="anchor" aria-label="anchor" href="#arg-fit"></a></dt>
 <dd><p>A <code>rails_fit</code> from <code><a href="rails.html">rails()</a></code>, or a <code>rails_subgroup_fit</code> from
-<code><a href="rails_subgroup.html">rails_subgroup()</a></code>. Either must have been fitted with <code>aggregated = FALSE</code>;
-the stacked variance additionally needs <code>keep_data = TRUE</code> (the default).</p></dd>
+<code><a href="rails_subgroup.html">rails_subgroup()</a></code>. Fits built with <code>aggregated = TRUE</code> are supported; see
+<code>y</code> and the section below.</p></dd>
 
 
 <dt id="arg-y">y<a class="anchor" aria-label="anchor" href="#arg-y"></a></dt>
-<dd><p>Outcome vector, aligned to the rows of the non-probability sample
-passed to <code><a href="rails.html">rails()</a></code>. Binary or continuous.</p></dd>
+<dd><p>The outcome. For a fit built from microdata, a vector aligned to the
+rows of the non-probability sample passed to <code><a href="rails.html">rails()</a></code>. For a fit built
+from cell tables, a data frame with columns <code>sum</code> and <code>sumsq</code> – the
+within-cell sum of the outcome and of its square – one row per cell, in
+the order of the cell table. For a 0/1 outcome the two columns are equal,
+so <code>sumsq</code> is just the case count again. Binary or continuous.</p></dd>
 
 
 <dt id="arg-type">type<a class="anchor" aria-label="anchor" href="#arg-type"></a></dt>
@@ -131,16 +135,22 @@ use those intervals stratum by stratum, and not for anything that pools or
 differences across strata.</p>
     </div>
     <div class="section level2">
-    <h2 id="why-individual-records-are-required">Why individual records are required<a class="anchor" aria-label="anchor" href="#why-individual-records-are-required"></a></h2>
+    <h2 id="everything-runs-on-cells">Everything runs on cells<a class="anchor" aria-label="anchor" href="#everything-runs-on-cells"></a></h2>
 
 
-<p>The estimator itself runs on aggregated cells, but the variance does not: it
-needs one <code>y</code> per record. For the stacked form there is a further reason.
-Within a covariate cell the model matrix row, the weight and the fitted
-propensity are all constant, yet the outcome is not, so the meat matrix wants
-within-cell sums of <code>y</code> rather than cell means. <code>rails_var()</code> therefore
-rebuilds individual-level model matrices from the data retained by
-<code>keep_data = TRUE</code>, and errors on a fit built from cell tables.</p>
+<p>The variance is computed from the same aggregated cells the estimator uses,
+not from individual records. Within a covariate cell the model matrix row,
+the weight and the fitted propensity are all constant, so each block of the
+sandwich needs at most three numbers per cell: the record count, the sum of
+the outcome, and the sum of its square. Blocks free of the outcome need only
+the count; blocks linear in it need the sum; the one quadratic block needs
+the sum of squares. On the reference side the meat is quadratic in the design
+weights, so <code><a href="rails_cells.html">rails_cells()</a></code> records <code>weight_sq</code> alongside <code>weight</code>.</p>
+<p>Cost therefore scales with the number of cells rather than the number of
+records, which for a biobank is a difference of two or three orders of
+magnitude. Given microdata, <code>rails_var()</code> reduces it to these statistics
+itself; given cell tables, supply them through <code>y</code>. <code>keep_data = TRUE</code> is no
+longer required for the stacked form.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

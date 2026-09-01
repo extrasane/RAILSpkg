@@ -23,15 +23,19 @@ rails_var(
   [`rails()`](https://extrasane.github.io/RAILSpkg/reference/rails.md),
   or a `rails_subgroup_fit` from
   [`rails_subgroup()`](https://extrasane.github.io/RAILSpkg/reference/rails_subgroup.md).
-  Either must have been fitted with `aggregated = FALSE`; the stacked
-  variance additionally needs `keep_data = TRUE` (the default).
+  Fits built with `aggregated = TRUE` are supported; see `y` and the
+  section below.
 
 - y:
 
-  Outcome vector, aligned to the rows of the non-probability sample
-  passed to
+  The outcome. For a fit built from microdata, a vector aligned to the
+  rows of the non-probability sample passed to
   [`rails()`](https://extrasane.github.io/RAILSpkg/reference/rails.md).
-  Binary or continuous.
+  For a fit built from cell tables, a data frame with columns `sum` and
+  `sumsq` – the within-cell sum of the outcome and of its square – one
+  row per cell, in the order of the cell table. For a 0/1 outcome the
+  two columns are equal, so `sumsq` is just the case count again. Binary
+  or continuous.
 
 - type:
 
@@ -95,16 +99,24 @@ applies within a stratum, but the per-stratum sandwich carries no
 covariance between strata, so it warns: use those intervals stratum by
 stratum, and not for anything that pools or differences across strata.
 
-## Why individual records are required
+## Everything runs on cells
 
-The estimator itself runs on aggregated cells, but the variance does
-not: it needs one `y` per record. For the stacked form there is a
-further reason. Within a covariate cell the model matrix row, the weight
-and the fitted propensity are all constant, yet the outcome is not, so
-the meat matrix wants within-cell sums of `y` rather than cell means.
-`rails_var()` therefore rebuilds individual-level model matrices from
-the data retained by `keep_data = TRUE`, and errors on a fit built from
-cell tables.
+The variance is computed from the same aggregated cells the estimator
+uses, not from individual records. Within a covariate cell the model
+matrix row, the weight and the fitted propensity are all constant, so
+each block of the sandwich needs at most three numbers per cell: the
+record count, the sum of the outcome, and the sum of its square. Blocks
+free of the outcome need only the count; blocks linear in it need the
+sum; the one quadratic block needs the sum of squares. On the reference
+side the meat is quadratic in the design weights, so
+[`rails_cells()`](https://extrasane.github.io/RAILSpkg/reference/rails_cells.md)
+records `weight_sq` alongside `weight`.
+
+Cost therefore scales with the number of cells rather than the number of
+records, which for a biobank is a difference of two or three orders of
+magnitude. Given microdata, `rails_var()` reduces it to these statistics
+itself; given cell tables, supply them through `y`. `keep_data = TRUE`
+is no longer required for the stacked form.
 
 ## See also
 

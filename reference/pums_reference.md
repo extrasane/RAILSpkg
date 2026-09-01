@@ -79,11 +79,11 @@ ref
 #>   margins    : 18 up to order 2
 #>   population : 21,198
 head(ref$cells)
-#>   agegroup    sex  income   weight
-#> 1    young female  p10-50 1855.646
-#> 2   middle   male p90-100  304.461
-#> 3    young   male  p50-90 1187.199
-#> 4    older female  p10-50 1033.802
-#> 5   middle female  p10-50 2265.910
-#> 6   middle   male  p50-90 1497.776
+#>   agegroup    sex  income   weight   n weight_sq
+#> 1    young female  p10-50 1855.646 399  8696.863
+#> 2   middle   male p90-100  304.461  70  1329.445
+#> 3    young   male  p50-90 1187.199 213  6667.814
+#> 4    older female  p10-50 1033.802 308  3484.918
+#> 5   middle female  p10-50 2265.910 578  8918.822
+#> 6   middle   male  p50-90 1497.776 316  7126.524
 ```

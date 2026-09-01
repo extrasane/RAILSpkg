@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">RAILS</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -120,7 +120,7 @@
 <span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/rails.html">rails</a></span><span class="op">(</span><span class="va">cells_np</span>, <span class="va">cells_ref</span>, <span class="va">vars</span>,</span>
 <span>             pop_totals <span class="op">=</span> <span class="va">totals</span>, aggregated <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p><code><a href="reference/rails_totals.html">rails_totals()</a></code> names the margins exactly as the calibration model matrix names them, which is the step most easily got wrong by hand. Supply your own <code>pop_totals</code> when the margins come from an external table rather than from the reference sample.</p>
-<p>Two consequences of <code>aggregated = TRUE</code>: <code><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights()</a></code> returns one weight per cell rather than per record, and <code><a href="reference/rails_var.html">rails_var()</a></code> will not run, since the variance needs one outcome per record.</p>
+<p>One consequence of <code>aggregated = TRUE</code>: <code><a href="https://rdrr.io/r/stats/weights.html" class="external-link">weights()</a></code> returns one weight per cell rather than per record. <code><a href="reference/rails_var.html">rails_var()</a></code> works either way – give it a per-record outcome for a microdata fit, or a per-cell <code>sum</code> and <code>sumsq</code> for an aggregated one.</p>
 </div>
 <div class="section level3">
 <h3 id="choosing-which-models-the-search-runs-between">Choosing which models the search runs between<a class="anchor" aria-label="anchor" href="#choosing-which-models-the-search-runs-between"></a>
@@ -410,7 +410,7 @@
 <div class="section level2">
 <h2 id="two-notes-on-inference">Two notes on inference<a class="anchor" aria-label="anchor" href="#two-notes-on-inference"></a>
 </h2>
-<p><code><a href="reference/rails_var.html">rails_var()</a></code> needs individual records, not cell tables – it needs one <code>y</code> per record. The stacked form needs them for a second reason: within a covariate cell the model matrix row, the weight and the fitted propensity are all constant, but the outcome is not. Fits built with <code>aggregated = TRUE</code> cannot be passed to it.</p>
+<p>Both variance forms run on the aggregated cells, not on individual records. Within a covariate cell the model matrix row, the weight and the fitted propensity are all constant, so each block of the sandwich needs at most three numbers per cell: the record count, the sum of the outcome, and the sum of its square. Given microdata, <code><a href="reference/rails_var.html">rails_var()</a></code> reduces the outcome to those itself; given a cell-table fit, pass them as a data frame with columns <code>sum</code> and <code>sumsq</code> (equal to each other for a 0/1 outcome). On a simulated cohort of 75,270 records collapsing to 164 cells this is 43x faster than the record-level form it replaced, and agrees with it to 4e-14 relative.</p>
 <p>Standard errors taken off a <code><a href="reference/rails_design.html">rails_design()</a></code> object treat the weights as fixed, matching <code><a href="reference/rails_var.html">rails_var()</a></code>’s simplified form. For the correction, use <code>rails_var(type = "both")</code>; the <code>ratio_full_naive</code> it reports is the ratio of the two, which can fall either side of 1 – raking to known margins removes variance, so the corrected figure is often the smaller one.</p>
 </div>
 <div class="section level2">

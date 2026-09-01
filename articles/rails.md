@@ -223,10 +223,12 @@ round(v[c("ci_full_lower", "ci_full_upper")], 4)
 #>        0.1905        0.2198
 ```
 
-The simplified form is the cheaper of the two by a wide margin – it
-needs no model matrix at all – which is why it is the default. The
-stacked form rebuilds individual-level model matrices, so it also needs
-the fit to have been made with `keep_data = TRUE`.
+The simplified form is the cheaper of the two – it needs no model matrix
+at all – which is why it is the default. Both run on the aggregated
+cells rather than on individual records, so neither needs
+`keep_data = TRUE`, and both work on a fit built with
+`aggregated = TRUE` when you pass the outcome per cell as `sum` and
+`sumsq`.
 
 ## Downstream analysis
 

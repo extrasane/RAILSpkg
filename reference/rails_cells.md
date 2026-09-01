@@ -40,9 +40,12 @@ rails_cells(data, vars, weights = NULL, drop_na = TRUE)
 ## Value
 
 A data frame with one row per cell: the columns named in `vars`, plus
-`weight`. It carries class `rails_cells` and an attribute `row_cell`,
-the integer index mapping each row of `data` to its cell, which is what
-lets
+`weight`, `n` (records in the cell) and `weight_sq` (sum of squared
+weights). The last two are what let
+[`rails_var()`](https://extrasane.github.io/RAILSpkg/reference/rails_var.md)
+compute the stacked sandwich from cells alone. It carries class
+`rails_cells` and an attribute `row_cell`, the integer index mapping
+each row of `data` to its cell, which is what lets
 [`rails()`](https://extrasane.github.io/RAILSpkg/reference/rails.md)
 return one weight per input record.
 
@@ -61,23 +64,23 @@ for the matching population margins.
 ``` r
 pop <- rails_simulate(500, seed = 1)
 rails_cells(pop[pop$aou == 1, ], c("agegroup", "sex"))
-#>   agegroup    sex weight
-#> 1    young female     15
-#> 2   middle female     32
-#> 3    older female     27
-#> 4    older   male      7
-#> 5   middle   male     10
-#> 6    young   male      2
+#>   agegroup    sex weight  n weight_sq
+#> 1    young female     15 15        15
+#> 2   middle female     32 32        32
+#> 3    older female     27 27        27
+#> 4    older   male      7  7         7
+#> 5   middle   male     10 10        10
+#> 6    young   male      2  2         2
 
 # A reference sample carrying design weights:
 ref <- pop[pop$s == 1, ]
 ref$dweight <- 1 / ref$ps
 rails_cells(ref, c("agegroup", "sex"), weights = "dweight")
-#>   agegroup    sex    weight
-#> 1    older   male  30.11030
-#> 2    young   male  56.48730
-#> 3   middle female 167.50293
-#> 4    young female 140.59382
-#> 5   middle   male 119.02028
-#> 6    older female  70.20786
+#>   agegroup    sex    weight  n weight_sq
+#> 1    older   male  30.11030  7  130.7037
+#> 2    young   male  56.48730 10  321.5076
+#> 3   middle female 167.50293 46  615.8940
+#> 4    young female 140.59382 34  592.7221
+#> 5   middle   male 119.02028 25  573.0375
+#> 6    older female  70.20786 22  227.0849
 ```

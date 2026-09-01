@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">RAILS</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -37,6 +37,23 @@
       <small>Source: <a href="https://github.com/extrasane/RAILSpkg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.2.0" id="rails-020">RAILS 0.2.0<a class="anchor" aria-label="anchor" href="#rails-020"></a></h2>
+<div class="section level3">
+<h3 id="the-variance-estimators-now-run-on-cells-0-2-0">The variance estimators now run on cells<a class="anchor" aria-label="anchor" href="#the-variance-estimators-now-run-on-cells-0-2-0"></a></h3>
+<p>Every other part of the package already computed on aggregated covariate cells; <code><a href="../reference/rails_var.html">rails_var()</a></code> was the exception, rebuilding individual-level model matrices and refusing any fit made with <code>aggregated = TRUE</code>. That is fixed.</p>
+<ul><li>Both variance forms are computed from cell-level sufficient statistics. Within a cell the model matrix row, the weight and the fitted propensity are constant, so each block of the sandwich needs at most the record count, the cell sum of the outcome, and the cell sum of its square. The reduction is exact; only the summation order changes.</li>
+<li>On a simulated cohort of 75,270 records collapsing to 164 cells, the stacked variance is 43x faster than before and agrees with the old record-level result to 4e-14 relative. The regression fixture against the original implementation passes unchanged.</li>
+<li>
+<code><a href="../reference/rails_var.html">rails_var()</a></code> accepts fits built with <code>aggregated = TRUE</code>. Pass the outcome per cell as a data frame with columns <code>sum</code> and <code>sumsq</code>; for a 0/1 outcome the two are the same case count.</li>
+<li>The stacked form no longer requires <code>keep_data = TRUE</code>. Neither form touches the retained records.</li>
+<li>
+<code><a href="../reference/rails_cells.html">rails_cells()</a></code> gains two columns, <code>n</code> (records in the cell) and <code>weight_sq</code> (sum of squared weights). The sandwich meat is quadratic in the design weights, so a cell table carrying only <code>weight</code> cannot reconstruct it. Cell tables built by hand still work for the estimator and for the simplified variance; the stacked form needs <code>weight_sq</code> and says so.</li>
+<li>
+<code><a href="../reference/rails.html">rails()</a></code> retains the reference cell table on the fit as <code>cells_ref</code>.</li>
+</ul><p>Fits saved by 0.1.0 carry no <code>cells_ref</code> and no <code>weight_sq</code>, so the stacked variance errors on them with an explicit message. Refit to use it.</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.0" id="rails-010">RAILS 0.1.0<a class="anchor" aria-label="anchor" href="#rails-010"></a></h2>
 <p>First public release.</p>

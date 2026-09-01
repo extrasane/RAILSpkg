@@ -17,6 +17,8 @@ Useful links:
 
 - <https://github.com/extrasane/RAILSpkg>
 
+- <https://extrasane.github.io/RAILSpkg/>
+
 - Report bugs at <https://github.com/extrasane/RAILSpkg/issues>
 
 ## Author

@@ -1,5 +1,44 @@
 # Changelog
 
+## RAILS 0.2.0
+
+### The variance estimators now run on cells
+
+Every other part of the package already computed on aggregated covariate
+cells;
+[`rails_var()`](https://extrasane.github.io/RAILSpkg/reference/rails_var.md)
+was the exception, rebuilding individual-level model matrices and
+refusing any fit made with `aggregated = TRUE`. That is fixed.
+
+- Both variance forms are computed from cell-level sufficient
+  statistics. Within a cell the model matrix row, the weight and the
+  fitted propensity are constant, so each block of the sandwich needs at
+  most the record count, the cell sum of the outcome, and the cell sum
+  of its square. The reduction is exact; only the summation order
+  changes.
+- On a simulated cohort of 75,270 records collapsing to 164 cells, the
+  stacked variance is 43x faster than before and agrees with the old
+  record-level result to 4e-14 relative. The regression fixture against
+  the original implementation passes unchanged.
+- [`rails_var()`](https://extrasane.github.io/RAILSpkg/reference/rails_var.md)
+  accepts fits built with `aggregated = TRUE`. Pass the outcome per cell
+  as a data frame with columns `sum` and `sumsq`; for a 0/1 outcome the
+  two are the same case count.
+- The stacked form no longer requires `keep_data = TRUE`. Neither form
+  touches the retained records.
+- [`rails_cells()`](https://extrasane.github.io/RAILSpkg/reference/rails_cells.md)
+  gains two columns, `n` (records in the cell) and `weight_sq` (sum of
+  squared weights). The sandwich meat is quadratic in the design
+  weights, so a cell table carrying only `weight` cannot reconstruct it.
+  Cell tables built by hand still work for the estimator and for the
+  simplified variance; the stacked form needs `weight_sq` and says so.
+- [`rails()`](https://extrasane.github.io/RAILSpkg/reference/rails.md)
+  retains the reference cell table on the fit as `cells_ref`.
+
+Fits saved by 0.1.0 carry no `cells_ref` and no `weight_sq`, so the
+stacked variance errors on them with an explicit message. Refit to use
+it.
+
 ## RAILS 0.1.0
 
 First public release.

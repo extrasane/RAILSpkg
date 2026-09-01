@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">RAILS</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -245,10 +245,12 @@ because it is the more conservative number.</p>
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="va">v</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"ci_full_lower"</span>, <span class="st">"ci_full_upper"</span><span class="op">)</span><span class="op">]</span>, <span class="fl">4</span><span class="op">)</span></span>
 <span><span class="co">#&gt; ci_full_lower ci_full_upper </span></span>
 <span><span class="co">#&gt;        0.1905        0.2198</span></span></code></pre></div>
-<p>The simplified form is the cheaper of the two by a wide margin – it
-needs no model matrix at all – which is why it is the default. The
-stacked form rebuilds individual-level model matrices, so it also needs
-the fit to have been made with <code>keep_data = TRUE</code>.</p>
+<p>The simplified form is the cheaper of the two – it needs no model
+matrix at all – which is why it is the default. Both run on the
+aggregated cells rather than on individual records, so neither needs
+<code>keep_data = TRUE</code>, and both work on a fit built with
+<code>aggregated = TRUE</code> when you pass the outcome per cell as
+<code>sum</code> and <code>sumsq</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="downstream-analysis">Downstream analysis<a class="anchor" aria-label="anchor" href="#downstream-analysis"></a>
