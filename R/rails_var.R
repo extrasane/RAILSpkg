@@ -22,10 +22,14 @@
 #' conservative.
 #'
 #' @param fit A `rails_fit` from [rails()], or a `rails_subgroup_fit` from
-#'   [rails_subgroup()]. Either must have been fitted with `aggregated = FALSE`;
-#'   the stacked variance additionally needs `keep_data = TRUE` (the default).
-#' @param y Outcome vector, aligned to the rows of the non-probability sample
-#'   passed to [rails()]. Binary or continuous.
+#'   [rails_subgroup()]. Fits built with `aggregated = TRUE` are supported; see
+#'   `y` and the section below.
+#' @param y The outcome. For a fit built from microdata, a vector aligned to the
+#'   rows of the non-probability sample passed to [rails()]. For a fit built
+#'   from cell tables, a data frame with columns `sum` and `sumsq` -- the
+#'   within-cell sum of the outcome and of its square -- one row per cell, in
+#'   the order of the cell table. For a 0/1 outcome the two columns are equal,
+#'   so `sumsq` is just the case count again. Binary or continuous.
 #' @param type Which variance to compute: `"simplified"` (the default),
 #'   `"stacked"`, or `"both"`.
 #' @param truth Optional known population value. When supplied, the returned
@@ -56,14 +60,21 @@
 #' use those intervals stratum by stratum, and not for anything that pools or
 #' differences across strata.
 #'
-#' @section Why individual records are required:
-#' The estimator itself runs on aggregated cells, but the variance does not: it
-#' needs one `y` per record. For the stacked form there is a further reason.
-#' Within a covariate cell the model matrix row, the weight and the fitted
-#' propensity are all constant, yet the outcome is not, so the meat matrix wants
-#' within-cell sums of `y` rather than cell means. `rails_var()` therefore
-#' rebuilds individual-level model matrices from the data retained by
-#' `keep_data = TRUE`, and errors on a fit built from cell tables.
+#' @section Everything runs on cells:
+#' The variance is computed from the same aggregated cells the estimator uses,
+#' not from individual records. Within a covariate cell the model matrix row,
+#' the weight and the fitted propensity are all constant, so each block of the
+#' sandwich needs at most three numbers per cell: the record count, the sum of
+#' the outcome, and the sum of its square. Blocks free of the outcome need only
+#' the count; blocks linear in it need the sum; the one quadratic block needs
+#' the sum of squares. On the reference side the meat is quadratic in the design
+#' weights, so [rails_cells()] records `weight_sq` alongside `weight`.
+#'
+#' Cost therefore scales with the number of cells rather than the number of
+#' records, which for a biobank is a difference of two or three orders of
+#' magnitude. Given microdata, `rails_var()` reduces it to these statistics
+#' itself; given cell tables, supply them through `y`. `keep_data = TRUE` is no
+#' longer required for the stacked form.
 #'
 #' @seealso [rails()], [rails_design()].
 #'
@@ -112,53 +123,87 @@ rails_var_one <- function(fit, y, type, truth, level) {
   if (!inherits(fit, "rails_fit")) {
     stop("`fit` must be a rails_fit object from rails().", call. = FALSE)
   }
-  if (isTRUE(fit$aggregated)) {
-    stop("rails_var() needs individual records, but `fit` was built from cell ",
-         "tables (aggregated = TRUE). Refit from microdata.", call. = FALSE)
-  }
-  if (want_stacked && is.null(fit$data)) {
-    stop("The stacked variance needs the retained covariate columns, but `fit` ",
-         "was built with keep_data = FALSE. Refit with keep_data = TRUE, or use ",
-         'type = "simplified".', call. = FALSE)
-  }
   if (want_stacked && (is.null(fit$formula_used) || is.null(fit$theta))) {
     stop("`fit` has no converged model: no stepwise step succeeded, so there ",
          "are no weights to compute a variance for.", call. = FALSE)
   }
 
-  y    <- as.vector(y)
-  w_NP <- as.vector(fit$weights)
+  cells  <- fit$cells
+  w_cell <- as.vector(fit$weights_unit)
+  n_c    <- nrow(cells)
 
-  if (length(y) != length(w_NP)) {
-    stop("`y` has length ", length(y), " but the non-probability sample has ",
-         length(w_NP), " rows.", call. = FALSE)
+  ## Records per cell. rails_cells() records this; a cell table built by hand
+  ## may not, in which case `weight` is the count -- true whenever the
+  ## non-probability sample is unweighted, which is the biobank case.
+  m_cell <- if (!is.null(cells$n)) as.numeric(cells$n) else as.numeric(cells$weight)
+
+  ## ---- Outcome, reduced to per-cell sufficient statistics ----------------
+  if (is.data.frame(y) || is.matrix(y)) {
+    yc <- as.data.frame(y)
+    if (!all(c("sum", "sumsq") %in% names(yc))) {
+      stop("Cell-level `y` needs columns `sum` and `sumsq`: the within-cell ",
+           "sum of the outcome and of its square. For a 0/1 outcome the two ",
+           "are equal.", call. = FALSE)
+    }
+    if (nrow(yc) != n_c) {
+      stop("Cell-level `y` has ", nrow(yc), " rows but the fit has ", n_c,
+           " cells.", call. = FALSE)
+    }
+    S_cell <- as.numeric(yc$sum)
+    Q_cell <- as.numeric(yc$sumsq)
+  } else {
+    y  <- as.vector(y)
+    rc <- fit$row_cell
+    if (is.null(rc)) {
+      stop("`fit` was built from cell tables, so `y` must be per cell too: ",
+           "pass a data frame with columns `sum` and `sumsq`, the within-cell ",
+           "sum of the outcome and of its square, one row per cell in the ",
+           "order of `fit$cells`. For a 0/1 outcome the two are equal.",
+           call. = FALSE)
+    }
+    if (length(y) != length(rc)) {
+      stop("`y` has length ", length(y), " but the non-probability sample has ",
+           length(rc), " rows.", call. = FALSE)
+    }
+    ok <- !is.na(rc) & !is.na(y)
+    if (any(!ok)) {
+      warning("rails_var(): dropping ", sum(!ok),
+              " record(s) with a missing weight or outcome.", call. = FALSE)
+    }
+    into_cells <- function(v, g) {
+      out <- numeric(n_c)
+      tab <- rowsum(v, g)
+      out[as.integer(rownames(tab))] <- tab[, 1]
+      out
+    }
+    S_cell <- into_cells(y[ok], rc[ok])
+    Q_cell <- into_cells(y[ok]^2, rc[ok])
+    m_cell <- into_cells(rep(1, sum(ok)), rc[ok])
   }
 
-  ## Rows dropped at aggregation (missing covariates) carry NA weights.
-  ok <- !is.na(w_NP) & !is.na(y)
-  if (any(!ok)) {
-    warning("rails_var(): dropping ", sum(!ok),
-            " record(s) with a missing weight or outcome.", call. = FALSE)
-  }
-
-  y    <- y[ok]
-  w_NP <- w_NP[ok]
-
-  if (!length(w_NP) || all(is.na(w_NP))) {
+  ## A cell with an unusable weight carries no information and drops out whole.
+  keep <- !is.na(w_cell) & m_cell > 0
+  if (!any(keep)) {
     stop("`fit` has no usable weights, so there is no variance to compute.",
          call. = FALSE)
   }
 
-  n_NP   <- length(w_NP)
-  N_hat  <- sum(w_NP)
-  mu_hat <- sum(w_NP * y) / N_hat
+  m <- m_cell[keep]
+  w <- w_cell[keep]
+  S <- S_cell[keep]
+  Q <- Q_cell[keep]
+
+  n_NP   <- sum(m)
+  N_hat  <- sum(m * w)
+  mu_hat <- sum(w * S) / N_hat
   z      <- stats::qnorm(1 - (1 - level) / 2)
 
   ## ---- Simplified variance ----------------------------------------------
-  ## The weights are treated as fixed, so this is EE3 alone. No model matrix is
-  ## involved, which is why it is available even without keep_data.
-  psi3_NP   <- w_NP * (y - mu_hat) / N_hat
-  var_naive <- sum(psi3_NP^2)
+  ## EE3 alone, with the weights treated as fixed. Over records this is
+  ## sum_i (w_i (y_i - mu))^2; within a cell w is constant, so that cell's
+  ## contribution is w^2 (sum y^2 - 2 mu sum y + m mu^2). No model matrix is
+  ## involved, which is why this needs nothing but the cell outcome totals.
+  var_naive <- sum((w / N_hat)^2 * (Q - 2 * mu_hat * S + m * mu_hat^2))
   se_naive  <- sqrt(var_naive)
   ci_naive  <- mu_hat + c(-1, 1) * z * se_naive
 
@@ -179,69 +224,84 @@ rails_var_one <- function(fit, y, type, truth, level) {
   }
 
   ## ---- Stacked variance -------------------------------------------------
+  ## Every block below is the record-level sandwich collapsed onto cells.
+  ## Within a cell the model matrix row, the weight and the fitted propensity
+  ## are constant, so a block linear in the outcome needs the cell sum of y, a
+  ## block quadratic in it needs the cell sum of y^2, and a block free of the
+  ## outcome needs only the record count. On the reference side the meat is
+  ## quadratic in the design weights, which is why the reference cell table has
+  ## to carry sum(d^2) as well as sum(d).
   cat_temp <- fit$formula_used
-  dt_np    <- fit$data$np[ok, , drop = FALSE]
-  dt_ref   <- fit$data$ref
-  d_P      <- as.vector(fit$data$d_ref)
+  cref     <- fit$cells_ref
+  if (is.null(cref)) {
+    stop("`fit` carries no reference cell table, so the stacked variance ",
+         "cannot be formed. Refit with this version of rails().", call. = FALSE)
+  }
+  if (is.null(cref$weight_sq)) {
+    stop("The reference cell table has no `weight_sq` column, the within-cell ",
+         "sum of squared design weights. The stacked variance is quadratic in ",
+         "those weights, so cell totals alone are not enough. Rebuild the ",
+         "reference cells with rails_cells(), which records it.", call. = FALSE)
+  }
 
-  X_ps_NP <- stats::model.matrix(cat_temp, dt_np)
-  X_ps_P  <- stats::model.matrix(cat_temp, dt_ref)
-  X_cal   <- X_ps_NP
+  D  <- as.numeric(cref$weight)
+  D2 <- as.numeric(cref$weight_sq)
+
+  ## Built on the full cell tables and then subset, so that factor levels
+  ## absent from the kept rows still contribute their columns.
+  X <- stats::model.matrix(cat_temp, as.data.frame(cells))[keep, , drop = FALSE]
+  Z <- stats::model.matrix(cat_temp, as.data.frame(cref))
 
   theta <- fit$theta
-  if (ncol(X_ps_NP) != length(theta)) {
-    stop("Model matrix has ", ncol(X_ps_NP), " columns but the fitted ",
-         "coefficient vector has ", length(theta), ". The retained data and ",
-         "the fitted model disagree, most likely because factor levels differ.",
+  if (ncol(X) != length(theta)) {
+    stop("Model matrix has ", ncol(X), " columns but the fitted ",
+         "coefficient vector has ", length(theta), ". The cell table and the ",
+         "fitted model disagree, most likely because factor levels differ.",
          call. = FALSE)
   }
-  if (nrow(X_ps_P) != length(d_P)) {
-    stop("Reference model matrix has ", nrow(X_ps_P), " rows but ", length(d_P),
-         " design weights; reference records with missing covariates were ",
-         "dropped by model.matrix().", call. = FALSE)
+  if (nrow(Z) != length(D)) {
+    stop("Reference model matrix has ", nrow(Z), " rows but ", length(D),
+         " cells; reference cells with missing covariates were dropped by ",
+         "model.matrix().", call. = FALSE)
   }
 
-  pi_NP <- stats::plogis(as.numeric(X_ps_NP %*% theta))
-  pi_P  <- stats::plogis(as.numeric(X_ps_P  %*% theta))
-  T_pop <- create_v3(fit$pop_totals, colnames(X_cal))
-  if (length(T_pop) != ncol(X_cal)) {
+  pi_NP <- stats::plogis(as.numeric(X %*% theta))
+  pi_P  <- stats::plogis(as.numeric(Z %*% theta))
+  T_pop <- create_v3(fit$pop_totals, colnames(X))
+  if (length(T_pop) != ncol(X)) {
     stop("Population margins are missing for ",
-         paste(setdiff(colnames(X_cal), names(T_pop)), collapse = ", "), ".",
+         paste(setdiff(colnames(X), names(T_pop)), collapse = ", "), ".",
          call. = FALSE)
   }
 
-  n_P <- length(d_P)
-  q   <- ncol(X_cal)
+  q   <- ncol(X)
+  n_P <- if (!is.null(cref$n)) sum(as.numeric(cref$n)) else NA_real_
 
-  ## ---- Individual psi vectors -------------------------------------------
-  ## EE1 and EE2 are scaled by 1/N_hat for numerical stability; EE3 is scaled
-  ## by 1/N_hat by definition. The sandwich is invariant to this scaling.
-  ## psi3_NP is the same vector the simplified variance used above.
-  psi1_P  <- -X_ps_P * d_P * pi_P / N_hat
-  psi1_NP <- X_ps_NP / N_hat
-  psi2_NP <- (X_cal * w_NP -
-                matrix(T_pop / n_NP, nrow = n_NP, ncol = q, byrow = TRUE)) / N_hat
+  ## psi2 is constant within a cell; psi3 sums to t_cell over one and its
+  ## squares sum to u_cell.
+  A      <- (X * w - matrix(T_pop / n_NP, nrow = nrow(X), ncol = q,
+                            byrow = TRUE)) / N_hat
+  t_cell <- w * (S - m * mu_hat) / N_hat
+  u_cell <- (w / N_hat)^2 * (Q - 2 * mu_hat * S + m * mu_hat^2)
 
   ## ---- Meat -------------------------------------------------------------
-  M_11 <- crossprod(psi1_P) + crossprod(psi1_NP)
-  M_12 <- crossprod(psi1_NP, psi2_NP)
-  M_13 <- crossprod(psi1_NP, psi3_NP)
-  M_22 <- crossprod(psi2_NP)
-  M_23 <- crossprod(psi2_NP, psi3_NP)
-  M_33 <- sum(psi3_NP^2)
+  M_11 <- crossprod(Z * (pi_P * sqrt(D2)) / N_hat) +
+          crossprod(X * sqrt(m) / N_hat)
+  M_12 <- crossprod(X * (m / N_hat), A)
+  M_13 <- crossprod(X / N_hat, t_cell)
+  M_22 <- crossprod(A * sqrt(m))
+  M_23 <- crossprod(A, t_cell)
+  M_33 <- sum(u_cell)
 
   ## ---- Bread ------------------------------------------------------------
-  ## Rows 1 and 2 inherit the 1/N_hat scaling from EE1 and EE2; row 3 does not.
-  B_11 <-  crossprod(X_ps_P * sqrt(d_P * pi_P * (1 - pi_P))) / N_hat
-  B_22 <- -crossprod(X_cal  * sqrt(w_NP))                    / N_hat
+  B_11 <-  crossprod(Z * sqrt(D * pi_P * (1 - pi_P))) / N_hat
+  B_22 <- -crossprod(X * sqrt(m * w))                 / N_hat
   B_33 <- 1
-  B_21 <- t(X_cal) %*% (X_ps_NP * w_NP * (1 - pi_NP))        / N_hat
+  B_21 <- crossprod(X, X * (m * w * (1 - pi_NP)))     / N_hat
 
-  multiplier_31 <- w_NP * (1 - pi_NP) * (y - mu_hat) / N_hat
-  B_31 <- matrix(colSums(sweep(X_ps_NP, 1, multiplier_31, "*")), nrow = 1)
-
-  multiplier_32 <- w_NP * (y - mu_hat) / N_hat
-  B_32 <- matrix(-colSums(sweep(X_cal, 1, multiplier_32, "*")), nrow = 1)
+  B_31 <- matrix(colSums(X * (w * (1 - pi_NP) * (S - m * mu_hat))) / N_hat,
+                 nrow = 1)
+  B_32 <- matrix(-colSums(X * (w * (S - m * mu_hat))) / N_hat, nrow = 1)
 
   ## ---- Bread inverse ----------------------------------------------------
   B_11_inv <- solve(B_11)
@@ -328,14 +388,25 @@ rails_var_one <- function(fit, y, type, truth, level) {
 #' @noRd
 rails_var_subgroup <- function(fit, y, type, truth, level) {
 
-  if (is.null(fit$weights)) {
-    stop("rails_var() needs individual records, but this subgroup fit was ",
-         "built from cell tables (aggregated = TRUE). Refit from microdata.",
-         call. = FALSE)
+  ## `y` is per record for a microdata fit and per cell for an aggregated one.
+  ## Either way `subgroup_rows` indexes the object the stratum was cut from, so
+  ## the same slice works for both.
+  cell_y <- is.data.frame(y) || is.matrix(y)
+  if (cell_y) {
+    y   <- as.data.frame(y)
+    n_y <- nrow(y)
+  } else {
+    y   <- as.vector(y)
+    n_y <- length(y)
   }
-  y <- as.vector(y)
-  if (length(y) != length(fit$weights)) {
-    stop("`y` has length ", length(y), " but the non-probability sample has ",
+
+  if (is.null(fit$weights) && !cell_y) {
+    stop("This subgroup fit was built from cell tables, so `y` must be per ",
+         "cell too: a data frame with columns `sum` and `sumsq`, one row per ",
+         "row of the cell table given to rails_subgroup().", call. = FALSE)
+  }
+  if (!is.null(fit$weights) && !cell_y && n_y != length(fit$weights)) {
+    stop("`y` has length ", n_y, " but the non-probability sample has ",
          length(fit$weights), " rows.", call. = FALSE)
   }
   if (!length(fit$fits)) {
@@ -390,7 +461,8 @@ rails_var_subgroup <- function(fit, y, type, truth, level) {
       stop("This subgroup fit predates per-stratum row tracking; refit with ",
            "rails_subgroup().", call. = FALSE)
     }
-    v <- rails_var_one(f, y[i], type, truth_for(lev), level)
+    y_i <- if (cell_y) y[i, , drop = FALSE] else y[i]
+    v <- rails_var_one(f, y_i, type, truth_for(lev), level)
     data.frame(subgroup = lev, as.list(v), check.names = FALSE,
                stringsAsFactors = FALSE)
   })

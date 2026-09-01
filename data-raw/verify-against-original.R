@@ -176,12 +176,34 @@ v_old <- orig_rails_var(
 )
 v_new <- rails_var(fit, aou$y, type = "both", truth = mean(pop$y))
 
+## The original sums the sandwich over individual records; the package sums the
+## same quantities over covariate cells, which is exact algebra but a different
+## summation order. Bit-equality is therefore not the right test here -- these
+## comparisons run at VAR_TOL, which is still far below anything of scientific
+## consequence. Everything outside this section stays at tolerance 0.
+##
+## term_11, term_12 and term_13 are exempt because they are numerically zero on
+## this data (order 1e-31 against a variance of 1e-05), so they carry only
+## cancellation noise and their *relative* difference is meaningless.
+VAR_TOL  <- 1e-10
+NEAR_ZED <- c("term_11", "term_12", "term_13")
+
 shared <- c("mu_hat", "var_naive", "se_naive", "var_full", "se_full",
             "ratio_full_naive", "term_11", "term_22", "term_33",
             "term_12", "term_13", "term_23", "N_hat", "n_NP", "n_P")
-for (nm in shared) ok <- c(ok, report(nm, v_old[[nm]], v_new[[nm]]))
-ok <- c(ok, report("ci_naive_lower", v_old[["ci_naive_lower"]], v_new[["ci_naive_lower"]]))
-ok <- c(ok, report("ci_full_upper",  v_old[["ci_full_upper"]],  v_new[["ci_full_upper"]]))
+for (nm in shared) {
+  if (nm %in% NEAR_ZED) {
+    ok <- c(ok, report(paste0(nm, " (both ~0)"), 0,
+                       max(abs(c(v_old[[nm]], v_new[[nm]]))) / v_old[["var_full"]],
+                       tol = 1e-12))
+  } else {
+    ok <- c(ok, report(nm, v_old[[nm]], v_new[[nm]], tol = VAR_TOL))
+  }
+}
+ok <- c(ok, report("ci_naive_lower", v_old[["ci_naive_lower"]],
+                   v_new[["ci_naive_lower"]], tol = VAR_TOL))
+ok <- c(ok, report("ci_full_upper",  v_old[["ci_full_upper"]],
+                   v_new[["ci_full_upper"]],  tol = VAR_TOL))
 ok <- c(ok, report("coverage (naive, full)",
                    c(v_old[["cover_naive_temp"]], v_old[["cover_full_temp"]]),
                    c(v_new[["cover_naive"]],      v_new[["cover_full"]])))
@@ -189,7 +211,18 @@ ok <- c(ok, report("coverage (naive, full)",
 ## The simplified-only path must agree with the same quantities in "both".
 v_simple <- rails_var(fit, aou$y, truth = mean(pop$y))
 ok <- c(ok, report("type='simplified' vs original var_naive",
-                   v_old[["var_naive"]], v_simple[["var_naive"]]))
+                   v_old[["var_naive"]], v_simple[["var_naive"]], tol = VAR_TOL))
+
+## An aggregated fit must reach the same numbers from cell tables alone.
+fit_agg <- suppressWarnings(rails(cells_np, cells_ref, vars,
+                                  aggregated = TRUE, lifo = "ascending",
+                                  verbose = FALSE))
+rc  <- attr(rails_cells(aou, vars), "row_cell")
+y_c <- data.frame(sum   = as.numeric(rowsum(aou$y,   rc)),
+                  sumsq = as.numeric(rowsum(aou$y^2, rc)))
+v_agg <- rails_var(fit_agg, y_c, type = "both", truth = mean(pop$y))
+ok <- c(ok, report("aggregated fit vs microdata fit (var_full)",
+                   v_new[["var_full"]], v_agg[["var_full"]], tol = VAR_TOL))
 
 ## ===========================================================================
 cat("\n===========================================================================\n")

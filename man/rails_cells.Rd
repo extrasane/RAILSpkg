@@ -22,7 +22,10 @@ them up front.}
 }
 \value{
 A data frame with one row per cell: the columns named in \code{vars}, plus
-\code{weight}. It carries class \code{rails_cells} and an attribute \code{row_cell}, the
+\code{weight}, \code{n} (records in the cell) and \code{weight_sq} (sum of squared
+weights). The last two are what let \code{\link[=rails_var]{rails_var()}} compute the stacked
+sandwich from cells alone. It carries class \code{rails_cells} and an attribute
+\code{row_cell}, the
 integer index mapping each row of \code{data} to its cell, which is what lets
 \code{\link[=rails]{rails()}} return one weight per input record.
 }

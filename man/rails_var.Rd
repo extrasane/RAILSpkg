@@ -14,11 +14,15 @@ rails_var(
 }
 \arguments{
 \item{fit}{A \code{rails_fit} from \code{\link[=rails]{rails()}}, or a \code{rails_subgroup_fit} from
-\code{\link[=rails_subgroup]{rails_subgroup()}}. Either must have been fitted with \code{aggregated = FALSE};
-the stacked variance additionally needs \code{keep_data = TRUE} (the default).}
+\code{\link[=rails_subgroup]{rails_subgroup()}}. Fits built with \code{aggregated = TRUE} are supported; see
+\code{y} and the section below.}
 
-\item{y}{Outcome vector, aligned to the rows of the non-probability sample
-passed to \code{\link[=rails]{rails()}}. Binary or continuous.}
+\item{y}{The outcome. For a fit built from microdata, a vector aligned to the
+rows of the non-probability sample passed to \code{\link[=rails]{rails()}}. For a fit built
+from cell tables, a data frame with columns \code{sum} and \code{sumsq} -- the
+within-cell sum of the outcome and of its square -- one row per cell, in
+the order of the cell table. For a 0/1 outcome the two columns are equal,
+so \code{sumsq} is just the case count again. Binary or continuous.}
 
 \item{type}{Which variance to compute: \code{"simplified"} (the default),
 \code{"stacked"}, or \code{"both"}.}
@@ -78,15 +82,22 @@ use those intervals stratum by stratum, and not for anything that pools or
 differences across strata.
 }
 
-\section{Why individual records are required}{
+\section{Everything runs on cells}{
 
-The estimator itself runs on aggregated cells, but the variance does not: it
-needs one \code{y} per record. For the stacked form there is a further reason.
-Within a covariate cell the model matrix row, the weight and the fitted
-propensity are all constant, yet the outcome is not, so the meat matrix wants
-within-cell sums of \code{y} rather than cell means. \code{rails_var()} therefore
-rebuilds individual-level model matrices from the data retained by
-\code{keep_data = TRUE}, and errors on a fit built from cell tables.
+The variance is computed from the same aggregated cells the estimator uses,
+not from individual records. Within a covariate cell the model matrix row,
+the weight and the fitted propensity are all constant, so each block of the
+sandwich needs at most three numbers per cell: the record count, the sum of
+the outcome, and the sum of its square. Blocks free of the outcome need only
+the count; blocks linear in it need the sum; the one quadratic block needs
+the sum of squares. On the reference side the meat is quadratic in the design
+weights, so \code{\link[=rails_cells]{rails_cells()}} records \code{weight_sq} alongside \code{weight}.
+
+Cost therefore scales with the number of cells rather than the number of
+records, which for a biobank is a difference of two or three orders of
+magnitude. Given microdata, \code{rails_var()} reduces it to these statistics
+itself; given cell tables, supply them through \code{y}. \code{keep_data = TRUE} is no
+longer required for the stacked form.
 }
 
 \examples{

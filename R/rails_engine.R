@@ -266,6 +266,7 @@ rails_engine <- function(cells_np, cells_ref, pop_totals, vars,
 
   list(
     cells          = cells_np,
+    cells_ref      = cells_ref,
     weights_cell   = weights_cell,
     terms_base     = terms_base,
     terms_selected = terms_selected,

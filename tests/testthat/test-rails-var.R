@@ -38,23 +38,78 @@ test_that("the variance decomposition adds up", {
   )
 })
 
-test_that("rails_var refuses fits it cannot handle", {
+test_that("the stacked variance no longer needs the retained microdata", {
   pop <- rails_simulate(20000, seed = 4)
   aou <- pop[pop$aou == 1, ]
   ref <- pop[pop$s == 1, ]
   ref$dweight <- 1 / ref$ps
   vars <- c("agegroup", "sex")
 
-  fit_nodata <- rails(aou, ref, vars, weights_ref = "dweight",
-                      keep_data = FALSE, verbose = FALSE)
-  expect_error(rails_var(fit_nodata, aou$y, type = "stacked"), "keep_data = FALSE")
-  ## The simplified variance needs no model matrix, so it still works.
-  expect_type(rails_var(fit_nodata, aou$y), "double")
+  ## Everything the sandwich needs now lives on the cell tables, so dropping
+  ## the records changes nothing.
+  keep <- rails(aou, ref, vars, weights_ref = "dweight",
+                keep_data = TRUE, verbose = FALSE)
+  drop <- rails(aou, ref, vars, weights_ref = "dweight",
+                keep_data = FALSE, verbose = FALSE)
 
-  fit_cells <- rails(rails_cells(aou, vars),
-                     rails_cells(ref, vars, weights = "dweight"),
-                     vars, aggregated = TRUE, verbose = FALSE)
-  expect_error(rails_var(fit_cells, aou$y), "individual records")
+  expect_equal(rails_var(keep, aou$y, type = "both"),
+               rails_var(drop, aou$y, type = "both"))
+})
+
+test_that("an aggregated fit gives the same variance as the microdata fit", {
+  pop <- rails_simulate(20000, seed = 4)
+  aou <- pop[pop$aou == 1, ]
+  ref <- pop[pop$s == 1, ]
+  ref$dweight <- 1 / ref$ps
+  vars <- c("agegroup", "sex")
+
+  cells_np  <- rails_cells(aou, vars)
+  cells_ref <- rails_cells(ref, vars, weights = "dweight")
+
+  fit_micro <- rails(aou, ref, vars, weights_ref = "dweight", verbose = FALSE)
+  fit_cells <- rails(cells_np, cells_ref, vars, aggregated = TRUE,
+                     verbose = FALSE)
+
+  ## The outcome aggregated the same way the covariates were.
+  rc  <- attr(cells_np, "row_cell")
+  y_c <- data.frame(sum   = as.numeric(rowsum(aou$y, rc)),
+                    sumsq = as.numeric(rowsum(aou$y^2, rc)))
+
+  expect_equal(rails_var(fit_cells, y_c, type = "both"),
+               rails_var(fit_micro, aou$y, type = "both"),
+               tolerance = 1e-8)
+})
+
+test_that("rails_var reports what it cannot do", {
+  pop <- rails_simulate(20000, seed = 4)
+  aou <- pop[pop$aou == 1, ]
+  ref <- pop[pop$s == 1, ]
+  ref$dweight <- 1 / ref$ps
+  vars <- c("agegroup", "sex")
+
+  cells_np  <- rails_cells(aou, vars)
+  cells_ref <- rails_cells(ref, vars, weights = "dweight")
+  fit_cells <- rails(cells_np, cells_ref, vars, aggregated = TRUE,
+                     verbose = FALSE)
+
+  ## A record-level outcome makes no sense against a cell-table fit.
+  expect_error(rails_var(fit_cells, aou$y), "must be per cell")
+
+  ## Nor does a cell outcome that does not line up.
+  bad <- data.frame(sum = 1, sumsq = 1)
+  expect_error(rails_var(fit_cells, bad), "rows but the fit has")
+  expect_error(rails_var(fit_cells, data.frame(total = 1)), "sum. and .sumsq")
+
+  ## A hand-built reference cell table carries no sum of squared weights, so
+  ## the stacked form cannot be formed from it.
+  legacy <- as.data.frame(cells_ref)[, c(vars, "weight")]
+  fit_legacy <- rails(as.data.frame(cells_np)[, c(vars, "weight")], legacy,
+                      vars, aggregated = TRUE, verbose = FALSE)
+  y_c <- data.frame(sum   = as.numeric(rowsum(aou$y, attr(cells_np, "row_cell"))),
+                    sumsq = as.numeric(rowsum(aou$y^2, attr(cells_np, "row_cell"))))
+  expect_error(rails_var(fit_legacy, y_c, type = "stacked"), "weight_sq")
+  ## The simplified form needs no reference side, so it still works.
+  expect_type(rails_var(fit_legacy, y_c), "double")
 
   fit <- rails(aou, ref, vars, weights_ref = "dweight", verbose = FALSE)
   expect_error(rails_var(fit, aou$y[-1]), "but the non-probability sample has")

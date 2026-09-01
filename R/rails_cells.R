@@ -21,7 +21,10 @@
 #'   them up front.
 #'
 #' @return A data frame with one row per cell: the columns named in `vars`, plus
-#'   `weight`. It carries class `rails_cells` and an attribute `row_cell`, the
+#'   `weight`, `n` (records in the cell) and `weight_sq` (sum of squared
+#'   weights). The last two are what let [rails_var()] compute the stacked
+#'   sandwich from cells alone. It carries class `rails_cells` and an attribute
+#'   `row_cell`, the
 #'   integer index mapping each row of `data` to its cell, which is what lets
 #'   [rails()] return one weight per input record.
 #'
@@ -76,7 +79,14 @@ rails_cells <- function(data, vars, weights = NULL, drop_na = TRUE) {
   idx   <- match(key, key[first])
 
   cells <- sub[first, , drop = FALSE]
-  cells$weight <- as.numeric(rowsum(w[keep], idx))
+  cells$weight    <- as.numeric(rowsum(w[keep], idx))
+  ## `n` and `weight_sq` make the cell table sufficient for the sandwich
+  ## variance: the meat is quadratic in the design weights, so cell sums of
+  ## w alone cannot reconstruct it, and the propensity block counts records
+  ## rather than weights. Both are cheap to carry and impossible to recover
+  ## later, once the microdata are gone.
+  cells$n         <- as.numeric(rowsum(rep(1, length(idx)), idx))
+  cells$weight_sq <- as.numeric(rowsum(w[keep]^2, idx))
   rownames(cells) <- NULL
 
   ## row_cell is indexed against the *original* rows; dropped rows get NA.
